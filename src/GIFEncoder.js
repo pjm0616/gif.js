@@ -9,6 +9,7 @@
 
 var NeuQuant = require('./TypedNeuQuant.js');
 var LZWEncoder = require('./LZWEncoder.js');
+var kdtree = require('./kdtree');
 
 function ByteArray() {
   this.page = -1;
@@ -74,6 +75,8 @@ function GIFEncoder(width, height) {
   this.indexedPixels = null; // converted frame indexed to palette
   this.colorDepth = null; // number of bit planes
   this.colorTab = null; // RGB palette
+  this.useKdtree = false;
+  this.colorTabKdtree = null;
   this.usedEntry = new Array(); // active palette entries
   this.palSize = 7; // color table size (bits-1)
   this.dispose = -1; // disposal code (-1 = use default)
@@ -134,6 +137,33 @@ GIFEncoder.prototype.setRepeat = function(repeat) {
 */
 GIFEncoder.prototype.setTransparent = function(color) {
   this.transparent = color;
+};
+
+function _colorTabMetric(a, b) {
+  var ca = a.coordinates, cb = b.coordinates;
+  var d0 = cb[0] - ca[0];
+  var d1 = cb[1] - ca[1];
+  var d2 = cb[2] - ca[2];
+  return d0*d0 + d1*d1 + d2*d2;
+};
+GIFEncoder.prototype.updateColorTabKdtree = function() {
+  var alreadyPut = new Set();
+  var colorTabPoints = [];
+  for (var i = 0, index = 0; i < this.colorTab.length; index++) {
+    var r = (this.colorTab[i++] & 0xff);
+    var g = (this.colorTab[i++] & 0xff);
+    var b = (this.colorTab[i++] & 0xff);
+    var c = b | (g << 8) | (r << 16);
+    if (alreadyPut.has(c)) {
+      continue;
+    }
+    alreadyPut.add(c);
+    colorTabPoints.push({
+      coordinates: [r, g, b],
+      index: index,
+    });
+  }
+  this.colorTabKdtree = new kdtree(colorTabPoints, _colorTabMetric);
 };
 
 /*
@@ -235,6 +265,9 @@ GIFEncoder.prototype.analyzePixels = function() {
     var imgq = new NeuQuant(this.pixels, this.sample);
     imgq.buildColormap(); // create reduced palette
     this.colorTab = imgq.getColormap();
+    if (this.useKdtree) {
+      this.updateColorTabKdtree();
+    }
   }
 
   // map image pixels to new palette
@@ -377,6 +410,11 @@ GIFEncoder.prototype.findClosest = function(c, used) {
 
 GIFEncoder.prototype.findClosestRGB = function(r, g, b, used) {
   if (this.colorTab === null) return -1;
+
+  if (this.colorTabKdtree != null && !used) {
+    var ret = this.colorTabKdtree.nearest({coordinates: [r, g, b]}, 1);
+    return ret[0][0].index;
+  }
 
   var c = b | (g << 8) | (r << 16);
 
