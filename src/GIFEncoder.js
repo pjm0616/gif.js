@@ -240,6 +240,8 @@ GIFEncoder.prototype.setDither = function(dither) {
 */
 GIFEncoder.prototype.setGlobalPalette = function(palette) {
   this.globalPalette = palette;
+  this.neuQuant = null;
+  this.colorTabKdtree = null;
 };
 
 /*
