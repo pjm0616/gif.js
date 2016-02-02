@@ -293,7 +293,7 @@ GIFEncoder.prototype.analyzePixels = function() {
 /*
   Index pixels, without dithering
 */
-GIFEncoder.prototype.indexPixels = function(imgq) {
+GIFEncoder.prototype.indexPixels = function() {
   var nPix = this.pixels.length / 3;
   this.indexedPixels = new Uint8Array(nPix);
   var k = 0;
